@@ -184,6 +184,25 @@ export const stagingDb = {
     return db.prepare("SELECT * FROM scraped_properties WHERE sync_status = 'pending'").all();
   },
 
+  deleteUnsyncedProperties(): { deleted: number } {
+    const info = db.prepare("DELETE FROM scraped_properties WHERE sync_status != 'synced'").run();
+    return { deleted: info.changes };
+  },
+
+  deleteSyncedProperties(): { deleted: number; codes: string[] } {
+    const rows = db.prepare("SELECT code FROM scraped_properties WHERE sync_status = 'synced'").all() as any[];
+    const codes = rows.map((r) => String(r.code).trim()).filter(Boolean);
+    const info = db.prepare("DELETE FROM scraped_properties WHERE sync_status = 'synced'").run();
+    return { deleted: info.changes, codes };
+  },
+
+  deleteSingleProperty(code: string): { deleted: number; sync_status?: string; metraj_id?: number } {
+    const row = db.prepare('SELECT sync_status, metraj_id FROM scraped_properties WHERE code = ?').get(code) as any;
+    if (!row) return { deleted: 0 };
+    db.prepare('DELETE FROM scraped_properties WHERE code = ?').run(code);
+    return { deleted: 1, sync_status: row.sync_status, metraj_id: row.metraj_id };
+  },
+
   clearAll() {
     db.prepare('DELETE FROM scraped_properties').run();
     db.prepare('DELETE FROM crawl_jobs').run();

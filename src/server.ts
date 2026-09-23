@@ -201,6 +201,63 @@ app.post('/api/sync-all', async (req, res) => {
   }
 });
 
+// Delete unsynced properties from staging SQLite
+app.post('/api/properties/delete-unsynced', (req, res) => {
+  try {
+    const { deleted } = stagingDb.deleteUnsyncedProperties();
+    res.json({ success: true, count: deleted, message: `${deleted} adet eklenmemiş ilan silindi.` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete synced properties (from staging, and optionally from Metraj PostgreSQL)
+app.post('/api/properties/delete-synced', async (req, res) => {
+  try {
+    const deleteFromMetraj = Boolean(req.body.deleteFromMetraj);
+    const { deleted, codes } = stagingDb.deleteSyncedProperties();
+    let metrajDeleted = 0;
+
+    if (deleteFromMetraj && codes.length > 0) {
+      const mRes = await metrajSync.deletePropertiesFromMetraj(codes);
+      metrajDeleted = mRes.deleted;
+    }
+
+    res.json({
+      success: true,
+      count: deleted,
+      metrajDeleted,
+      message: `${deleted} adet aktarılmış ilan silindi.${deleteFromMetraj ? ` (${metrajDeleted} ilan Metraj veritabanından da kaldırıldı)` : ''}`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete a single property
+app.delete('/api/properties/:code', async (req, res) => {
+  try {
+    const code = req.params.code;
+    const deleteFromMetraj = Boolean(req.body.deleteFromMetraj || req.query.deleteFromMetraj === 'true');
+    const { deleted, sync_status } = stagingDb.deleteSingleProperty(code);
+
+    let metrajDeleted = 0;
+    if (deleteFromMetraj && sync_status === 'synced') {
+      const mRes = await metrajSync.deletePropertiesFromMetraj([code]);
+      metrajDeleted = mRes.deleted;
+    }
+
+    res.json({
+      success: true,
+      deleted,
+      metrajDeleted,
+      message: `#${code} numaralı ilan silindi.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Clear all scraped properties in staging
 app.post('/api/properties/clear', (req, res) => {
   try {

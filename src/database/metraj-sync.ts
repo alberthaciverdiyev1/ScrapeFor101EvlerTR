@@ -624,6 +624,46 @@ export class MetrajSyncService {
     this.clearMetrajCache();
     return { total: pendingList.length, succeeded, failed };
   }
+
+  async deletePropertiesFromMetraj(codes: string[]): Promise<{ deleted: number }> {
+    if (!this.isConnected) {
+      await this.init();
+    }
+    if (!this.isConnected || codes.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const client = await this.pool.connect();
+    try {
+      const res = await client.query(
+        'SELECT id FROM properties WHERE code = ANY($1)',
+        [codes]
+      );
+      const ids = res.rows.map((r) => r.id);
+
+      const delRes = await client.query(
+        'DELETE FROM properties WHERE code = ANY($1)',
+        [codes]
+      );
+
+      for (const id of ids) {
+        const propDir = path.resolve(config.metrajPath, 'storage/app/public/properties', String(id));
+        if (fs.existsSync(propDir)) {
+          try {
+            fs.rmSync(propDir, { recursive: true, force: true });
+          } catch {}
+        }
+      }
+
+      this.clearMetrajCache();
+      return { deleted: delRes.rowCount || 0 };
+    } catch (err: any) {
+      console.error('Failed to delete properties from Metraj:', err.message);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 export const metrajSync = new MetrajSyncService();

@@ -250,6 +250,30 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
+
+          <span class="h-4 w-px bg-slate-200 mx-1"></span>
+
+          <!-- Delete Unsynced Button -->
+          <button @click="deleteUnsynced()"
+                  :disabled="deleting || (stats.pending + stats.failed) === 0"
+                  class="inline-flex items-center px-3 py-1.5 bg-amber-50 hover:bg-amber-100 disabled:opacity-40 text-amber-700 border border-amber-200 text-xs font-semibold rounded-lg transition shadow-sm"
+                  title="Metraj'a eklenmemiş tüm ilanları staging havuzundan sil">
+            <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>Eklenmemişleri Sil (<span x-text="(stats.pending || 0) + (stats.failed || 0)"></span>)</span>
+          </button>
+
+          <!-- Delete Synced Button -->
+          <button @click="openDeleteSyncedModal()"
+                  :disabled="deleting || stats.synced === 0"
+                  class="inline-flex items-center px-3 py-1.5 bg-rose-50 hover:bg-rose-100 disabled:opacity-40 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg transition shadow-sm"
+                  title="Metraj'a eklenen ilanları sil">
+            <svg class="w-3.5 h-3.5 mr-1.5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>Eklenenleri Sil (<span x-text="stats.synced || 0"></span>)</span>
+          </button>
         </div>
       </div>
 
@@ -329,12 +353,17 @@
                   </span>
                 </td>
 
-                <td class="px-4 py-3 whitespace-nowrap text-right space-x-2">
+                <td class="px-4 py-3 whitespace-nowrap text-right space-x-1.5">
                   <button @click="openDetail(item.code)" class="text-slate-500 hover:text-slate-800 font-semibold text-[11px] underline">Detay</button>
                   <button @click="syncSingle(item.code)" 
                           :disabled="item.sync_status === 'synced'"
                           class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-30 text-indigo-700 font-bold rounded text-[11px] transition">
                     Metraj'a Aktar
+                  </button>
+                  <button @click="deleteSingle(item.code, item.sync_status)"
+                          class="px-2 py-1 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-500 rounded text-[11px] font-medium transition"
+                          title="İlanı Sil">
+                    Sil
                   </button>
                 </td>
               </tr>
@@ -413,12 +442,60 @@
     </div>
   </div>
 
+  <!-- Delete Synced Modal -->
+  <div x-show="deleteSyncedModal.open" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="font-bold text-base text-slate-900 flex items-center text-rose-600">
+          <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Metraj'a Eklenen İlanları Sil
+        </h3>
+        <button @click="deleteSyncedModal.open = false" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="space-y-3 text-xs text-slate-600 leading-relaxed">
+        <p>
+          Şu an havuzda Metraj'a aktarılmış toplam <strong class="text-slate-900" x-text="stats.synced || 0"></strong> adet ilan bulunuyor.
+        </p>
+
+        <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+          <label class="flex items-start space-x-2 cursor-pointer">
+            <input type="checkbox" x-model="deleteSyncedModal.deleteFromMetraj" class="mt-0.5 rounded border-rose-300 text-rose-600 focus:ring-rose-500">
+            <span class="font-bold text-rose-900 text-xs">Metraj veritabanından da sil</span>
+          </label>
+          <p class="text-[11px] text-rose-700 ml-5">
+            İşaretlenirse ilanlar hem scraper havuzundan hem de canlı Metraj PostgreSQL veritabanından (ve yerel depolanan fotoğraflarından) tamamen silinir.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-3 border-t">
+        <button @click="deleteSyncedModal.open = false" 
+                class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs transition">
+          Vazgeç
+        </button>
+        <button @click="confirmDeleteSynced()" 
+                :disabled="deleting"
+                class="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-lg text-xs shadow-md shadow-rose-600/20 transition">
+          <span x-text="deleting ? 'Siliniyor...' : 'Evet, Sil'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     function dashboard() {
       return {
         stats: { total: 0, synced: 0, pending: 0, failed: 0 },
         isCrawling: false,
         syncingAll: false,
+        deleting: false,
+        deleteSyncedModal: {
+          open: false,
+          deleteFromMetraj: true
+        },
         activeJob: null,
         categories: [],
         cities: [],
@@ -578,6 +655,84 @@
             this.detailModal.open = true;
           } catch (e) {
             alert('İlan detayı yüklenemedi');
+          }
+        },
+
+        async deleteUnsynced() {
+          const count = (this.stats.pending || 0) + (this.stats.failed || 0);
+          if (count === 0) return;
+          if (!confirm(`Metraj'a henüz eklenmemiş ${count} adet ilanı scraper havuzundan silmek istediğinize emin misiniz?`)) return;
+
+          this.deleting = true;
+          try {
+            const res = await fetch('/api/properties/delete-unsynced', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+              await this.refreshStats();
+              await this.loadProperties();
+            } else {
+              alert('Silme hatası: ' + data.error);
+            }
+          } catch (e) {
+            alert('Hata: ' + e.message);
+          } finally {
+            this.deleting = false;
+          }
+        },
+
+        openDeleteSyncedModal() {
+          if ((this.stats.synced || 0) === 0) return;
+          this.deleteSyncedModal.deleteFromMetraj = true;
+          this.deleteSyncedModal.open = true;
+        },
+
+        async confirmDeleteSynced() {
+          this.deleting = true;
+          try {
+            const res = await fetch('/api/properties/delete-synced', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ deleteFromMetraj: this.deleteSyncedModal.deleteFromMetraj })
+            });
+            const data = await res.json();
+            if (data.success) {
+              this.deleteSyncedModal.open = false;
+              await this.refreshStats();
+              await this.loadProperties();
+            } else {
+              alert('Silme hatası: ' + data.error);
+            }
+          } catch (e) {
+            alert('Hata: ' + e.message);
+          } finally {
+            this.deleting = false;
+          }
+        },
+
+        async deleteSingle(code, status) {
+          let deleteFromMetraj = false;
+          if (status === 'synced') {
+            const answer = confirm(`#${code} numaralı ilan Metraj'a aktarılmış.\n\nMetraj veritabanından da silinsin mi?\n[Tamam]: Hem Metraj'dan hem Scraper'dan sil\n[İptal]: Sadece Scraper havuzundan sil`);
+            deleteFromMetraj = answer;
+          } else {
+            if (!confirm(`#${code} numaralı ilanı silmek istediğinize emin misiniz?`)) return;
+          }
+
+          try {
+            const res = await fetch(`/api/properties/${code}`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ deleteFromMetraj })
+            });
+            const data = await res.json();
+            if (data.success) {
+              await this.refreshStats();
+              await this.loadProperties();
+            } else {
+              alert('Silme hatası: ' + data.error);
+            }
+          } catch (e) {
+            alert('Hata: ' + e.message);
           }
         }
       }
