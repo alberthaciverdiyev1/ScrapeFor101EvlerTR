@@ -477,7 +477,7 @@ export class MetrajSyncService {
 
 
   private async downloadAndSaveImages(propertyId: number, images: string[]): Promise<string[]> {
-    const metrajStorageBase = path.resolve(process.cwd(), '../Metraj/storage/app/public/properties', String(propertyId));
+    const metrajStorageBase = path.resolve(config.metrajPath, 'storage/app/public/properties', String(propertyId));
     try {
       await fs.promises.mkdir(metrajStorageBase, { recursive: true });
     } catch {}
@@ -534,10 +534,7 @@ export class MetrajSyncService {
 
   private clearMetrajCache(): void {
     import('child_process').then(({ exec }) => {
-      import('path').then((path) => {
-        const metrajDir = path.resolve(process.cwd(), '../Metraj');
-        exec('php artisan cache:clear', { cwd: metrajDir }, () => {});
-      });
+      exec('php artisan cache:clear', { cwd: config.metrajPath }, () => {});
     }).catch(() => {});
   }
 

@@ -4,8 +4,14 @@ import fs from 'fs';
 
 dotenv.config();
 
+const defaultMetrajPath = fs.existsSync(path.resolve(process.cwd(), '../kibriskare'))
+  ? path.resolve(process.cwd(), '../kibriskare')
+  : path.resolve(process.cwd(), '../Metraj');
+
+const metrajPath = process.env.METRAJ_PATH || defaultMetrajPath;
+
 // Auto-read Metraj database config if available
-const metrajEnvPath = path.resolve(process.cwd(), '../Metraj/.env');
+const metrajEnvPath = path.resolve(metrajPath, '.env');
 let metrajDbConfig = {
   host: process.env.METRAJ_DB_HOST || '127.0.0.1',
   port: Number(process.env.METRAJ_DB_PORT) || 5432,
@@ -37,5 +43,6 @@ export const config = {
   requestTimeoutMs: 15000,
   defaultDelayMs: 1000,
   sqlitePath: path.resolve(process.cwd(), 'data/staging.db'),
+  metrajPath,
   metrajDb: metrajDbConfig,
 };
