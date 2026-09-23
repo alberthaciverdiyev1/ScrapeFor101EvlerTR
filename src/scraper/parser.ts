@@ -4,7 +4,7 @@ import { buildPropertyTitles } from './title-builder.js';
 
 export function parseListingPage(html: string): { urls: string[]; totalPages?: number } {
   const $ = cheerio.load(html);
-  const urls: string[] = [];
+  const rawUrls: string[] = [];
 
   // 1. Try extracting from JSON-LD ItemList
   $('script[type="application/ld+json"]').each((_, el) => {
@@ -13,7 +13,7 @@ export function parseListingPage(html: string): { urls: string[]; totalPages?: n
       if (data['@type'] === 'ItemList' && Array.isArray(data.itemListElement)) {
         for (const item of data.itemListElement) {
           if (item.url && typeof item.url === 'string') {
-            urls.push(item.url);
+            rawUrls.push(item.url);
           }
         }
       }
@@ -21,14 +21,28 @@ export function parseListingPage(html: string): { urls: string[]; totalPages?: n
   });
 
   // 2. Fallback: Parse from HTML anchors if JSON-LD wasn't present
-  if (urls.length === 0) {
+  if (rawUrls.length === 0) {
     $('a[href*="/kibris/"]').each((_, el) => {
       const href = $(el).attr('href');
       if (href && href.endsWith('.html') && href.includes('-')) {
         const fullUrl = href.startsWith('http') ? href : `https://www.101evler.com${href}`;
-        if (!urls.includes(fullUrl)) urls.push(fullUrl);
+        rawUrls.push(fullUrl);
       }
     });
+  }
+
+  // Deduplicate by listing code or clean URL
+  const urls: string[] = [];
+  const seenCodes = new Set<string>();
+
+  for (const rawUrl of rawUrls) {
+    const cleanUrl = rawUrl.split('?')[0].trim();
+    const codeMatch = cleanUrl.match(/-(\d+)\.html/);
+    const key = codeMatch ? codeMatch[1] : cleanUrl;
+    if (!seenCodes.has(key)) {
+      seenCodes.add(key);
+      urls.push(cleanUrl);
+    }
   }
 
   return { urls };
