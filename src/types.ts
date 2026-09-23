@@ -100,6 +100,7 @@ export interface CrawlOptions {
   city?: string;
   maxPages?: number;
   delayMs?: number;
+  forceUpdate?: boolean;
 }
 
 export interface CrawlJob {
@@ -111,6 +112,7 @@ export interface CrawlJob {
   currentPage: number;
   totalFound: number;
   scrapedCount: number;
+  skippedCount: number;
   errorCount: number;
   startedAt: string | null;
   finishedAt: string | null;

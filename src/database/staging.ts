@@ -116,6 +116,16 @@ export const stagingDb = {
     return db.prepare('SELECT * FROM scraped_properties WHERE code = ?').get(code);
   },
 
+  hasProperty(code: string): boolean {
+    const row = db.prepare('SELECT 1 FROM scraped_properties WHERE code = ? LIMIT 1').get(code);
+    return !!row;
+  },
+
+  getAllCodes(): Set<string> {
+    const rows = db.prepare('SELECT code FROM scraped_properties').pluck().all() as string[];
+    return new Set(rows.map((c) => String(c).trim()));
+  },
+
   listProperties(filters: {
     status?: string;
     city?: string;

@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { config } from '../config/index.js';
 import { parseListingPage, parsePropertyDetail } from './parser.js';
 import { stagingDb } from '../database/staging.js';
+import { metrajSync } from '../database/metraj-sync.js';
 import type { CrawlOptions, CrawlJob, CrawlLog } from '../types.js';
 
 export class Crawler extends EventEmitter {
@@ -89,6 +90,7 @@ export class Crawler extends EventEmitter {
       currentPage: 0,
       totalFound: 0,
       scrapedCount: 0,
+      skippedCount: 0,
       errorCount: 0,
       startedAt: new Date().toISOString(),
       finishedAt: null,
@@ -96,6 +98,28 @@ export class Crawler extends EventEmitter {
 
     this.log('info', `🚀 Tarama başlatıldı: ${categoryUrl} (Maks Sayfa: ${maxPages})`);
     this.emit('progress', this.currentJob);
+
+    // Preload existing codes from SQLite and Metraj PostgreSQL to prevent duplicate crawls
+    const existingCodes = new Set<string>();
+    if (!options.forceUpdate) {
+      try {
+        const sqliteCodes = stagingDb.getAllCodes();
+        for (const c of sqliteCodes) existingCodes.add(c);
+      } catch (err: any) {
+        this.log('warn', `SQLite kodları okunamadı: ${err.message}`);
+      }
+
+      try {
+        const postgresCodes = await metrajSync.getExistingCodes();
+        for (const c of postgresCodes) existingCodes.add(c);
+      } catch (err: any) {
+        this.log('warn', `Metraj PostgreSQL kodları okunamadı: ${err.message}`);
+      }
+
+      this.log('info', `📋 Toplam ${existingCodes.size} mevcut ilan hafızaya alındı (tekrar çekilmeyecek).`);
+    } else {
+      this.log('warn', '⚠️ Zorla güncelleme (Force Update) aktif: Mevcut ilanlar da yeniden çekilecek.');
+    }
 
     try {
       for (let page = 1; page <= maxPages; page++) {
@@ -131,12 +155,26 @@ export class Crawler extends EventEmitter {
         for (const detailUrl of urls) {
           if (this.shouldStop) break;
 
+          // Extract listing code from URL: e.g. /girne-girne-merkez-daire-487251.html -> 487251
+          const codeMatch = detailUrl.match(/-(\d+)\.html/);
+          const code = codeMatch ? codeMatch[1] : null;
+
+          if (code && existingCodes.has(code) && !options.forceUpdate) {
+            this.currentJob.skippedCount++;
+            this.log('info', `⏭️ [#${code}] Zaten mevcut, atlandı.`);
+            this.emit('progress', this.currentJob);
+            continue;
+          }
+
           try {
             await this.delay(delayMs);
             const detailHtml = await this.fetchHtml(detailUrl);
             const propertyData = parsePropertyDetail(detailHtml, detailUrl);
 
             stagingDb.upsertProperty(propertyData);
+            if (propertyData.code) {
+              existingCodes.add(propertyData.code);
+            }
             this.currentJob.scrapedCount++;
 
             this.log(
@@ -155,7 +193,7 @@ export class Crawler extends EventEmitter {
 
       this.currentJob.status = this.shouldStop ? 'stopped' : 'completed';
       this.currentJob.finishedAt = new Date().toISOString();
-      this.log('info', `✨ Tarama bitti! Toplam çekilen ilan: ${this.currentJob.scrapedCount}, Hata: ${this.currentJob.errorCount}`);
+      this.log('info', `✨ Tarama bitti! Yeni çekilen: ${this.currentJob.scrapedCount}, Önceden var olan (atlanan): ${this.currentJob.skippedCount}, Hata: ${this.currentJob.errorCount}`);
     } catch (err: any) {
       this.currentJob.status = 'failed';
       this.log('error', `🚨 Beklenmeyen hata: ${err.message}`);

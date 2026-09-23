@@ -82,6 +82,27 @@ export class MetrajSyncService {
     }
   }
 
+  async getExistingCodes(): Promise<Set<string>> {
+    if (!this.isConnected) {
+      await this.init();
+    }
+    if (!this.isConnected) {
+      return new Set();
+    }
+
+    try {
+      const res = await this.pool.query('SELECT code FROM properties WHERE code IS NOT NULL');
+      const set = new Set<string>();
+      for (const row of res.rows) {
+        if (row.code) set.add(String(row.code).trim());
+      }
+      return set;
+    } catch (err: any) {
+      console.warn('⚠️ Metraj PostgreSQL kodları alınamadı:', err.message);
+      return new Set();
+    }
+  }
+
   async syncProperty(rawItem: RawPropertyData): Promise<{ success: boolean; propertyId?: number; error?: string }> {
     if (!this.isConnected) {
       await this.init();

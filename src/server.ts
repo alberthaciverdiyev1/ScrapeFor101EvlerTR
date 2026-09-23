@@ -106,7 +106,7 @@ app.get('/api/properties/:code', (req, res) => {
 
 // Start crawling
 app.post('/api/crawl/start', async (req, res) => {
-  const { categoryUrl, city, maxPages, delayMs } = req.body;
+  const { categoryUrl, city, maxPages, delayMs, forceUpdate } = req.body;
 
   let finalUrl = categoryUrl || '/kibris/satilik-konut';
   if (city && !finalUrl.includes(city)) {
@@ -124,6 +124,7 @@ app.post('/api/crawl/start', async (req, res) => {
       city: city || 'Tümü',
       maxPages: Number(maxPages) || 3,
       delayMs: Number(delayMs) || 1000,
+      forceUpdate: Boolean(forceUpdate),
     })
     .catch((err) => {
       console.error('Crawler execution error:', err);
