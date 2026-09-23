@@ -1,0 +1,37 @@
+{
+  "name": "home-scraper",
+  "version": "1.0.0",
+  "description": "101evler.com scraper and sync engine for Metraj (KibrisKare)",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc && cp -r src/public dist/",
+    "start": "node dist/server.js"
+  },
+  "keywords": [
+    "scraper",
+    "real-estate",
+    "kibris",
+    "101evler",
+    "metraj"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "cheerio": "^1.2.0",
+    "dotenv": "^18.0.3",
+    "express": "^5.2.1",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

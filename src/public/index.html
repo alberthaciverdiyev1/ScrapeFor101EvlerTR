@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="tr" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HomeScraper - 101evler to Metraj Panel</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .terminal-scroll::-webkit-scrollbar { width: 6px; }
+    .terminal-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body class="h-full font-sans antialiased text-slate-800" x-data="dashboard()" x-init="init()">
+
+  <!-- Top Navbar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-blue-500/20">
+          HS
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">HomeScraper <span class="text-xs font-medium px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full ml-1">v1.0</span></h1>
+          <p class="text-xs text-slate-500">101evler.com ➔ Metraj (KibrisKare) Veri Köprüsü</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <!-- Live status badge -->
+        <div class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium border"
+             :class="isCrawling ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'">
+          <span class="w-2 h-2 rounded-full" :class="isCrawling ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"></span>
+          <span x-text="isCrawling ? 'Tarama Aktif' : 'Boşta (Hazır)'"></span>
+        </div>
+
+        <button @click="syncAll()" :disabled="syncingAll || stats.pending === 0" 
+                class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+          <svg class="w-4 h-4 mr-1.5" :class="syncingAll ? 'animate-spin' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span x-text="syncingAll ? 'Metraj\'a Aktarılıyor...' : `Tümünü Metraj'a Aktar (${stats.pending})`"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Toplam Çekilen</p>
+          <h3 class="text-2xl font-extrabold text-slate-900 mt-1" x-text="stats.total || 0">0</h3>
+        </div>
+        <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg">
+          📦
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Metraj'a Aktarılan</p>
+          <h3 class="text-2xl font-extrabold text-emerald-600 mt-1" x-text="stats.synced || 0">0</h3>
+        </div>
+        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">
+          ✅
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Bekleyen (Staging)</p>
+          <h3 class="text-2xl font-extrabold text-amber-600 mt-1" x-text="stats.pending || 0">0</h3>
+        </div>
+        <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-lg">
+          ⏳
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Hatalı / Başarısız</p>
+          <h3 class="text-2xl font-extrabold text-rose-600 mt-1" x-text="stats.failed || 0">0</h3>
+        </div>
+        <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-lg">
+          ⚠️
+        </div>
+      </div>
+    </div>
+
+    <!-- Scrape Control & Live Console Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Control Card (5 cols) -->
+      <div class="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <h2 class="text-base font-bold text-slate-900 flex items-center">
+          <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+          </svg>
+          Yeni Tarama Görevi
+        </h2>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Kategori</label>
+            <select x-model="crawlForm.categoryUrl" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <template x-for="cat in categories" :key="cat.path">
+                <option :value="cat.path" x-text="cat.name"></option>
+              </template>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Şehir / Lokasyon</label>
+            <select x-model="crawlForm.city" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <template x-for="c in cities" :key="c.slug">
+                <option :value="c.slug" x-text="c.name"></option>
+              </template>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Maksimum Sayfa</label>
+              <input type="number" x-model.number="crawlForm.maxPages" min="1" max="100" 
+                     class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <p class="text-[10px] text-slate-400 mt-0.5">Her sayfa ~30 ilan</p>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Gecikme (ms)</label>
+              <input type="number" x-model.number="crawlForm.delayMs" min="300" max="5000" step="100"
+                     class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <p class="text-[10px] text-slate-400 mt-0.5">Önerilen: 1000ms</p>
+            </div>
+          </div>
+
+          <div class="pt-2 flex items-center space-x-3">
+            <button @click="startCrawl()" :disabled="isCrawling"
+                    class="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white py-2.5 px-4 rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition flex items-center justify-center">
+              <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              </svg>
+              Taramayı Başlat
+            </button>
+
+            <button @click="stopCrawl()" :disabled="!isCrawling"
+                    class="bg-rose-50 hover:bg-rose-100 disabled:opacity-40 text-rose-700 border border-rose-200 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center">
+              <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+              </svg>
+              Durdur
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Terminal / Console (7 cols) -->
+      <div class="lg:col-span-7 bg-slate-900 rounded-2xl border border-slate-800 shadow-md p-5 flex flex-col justify-between h-[360px]">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
+            <span class="text-xs font-mono font-medium text-slate-400 ml-2">Canlı Tarama Akışı (SSE)</span>
+          </div>
+          <button @click="logs = []" class="text-[11px] text-slate-500 hover:text-slate-300 font-mono">Temizle</button>
+        </div>
+
+        <!-- Terminal log list -->
+        <div id="terminal-body" class="flex-1 overflow-y-auto font-mono text-xs my-2 pr-2 space-y-1 terminal-scroll">
+          <template x-for="(log, idx) in logs" :key="idx">
+            <div class="leading-relaxed flex items-start space-x-2">
+              <span class="text-slate-600 select-none text-[10px]" x-text="log.timestamp"></span>
+              <span class="px-1 py-0.2 rounded text-[10px] uppercase font-bold"
+                    :class="{
+                      'bg-emerald-950 text-emerald-400 border border-emerald-800': log.level === 'success',
+                      'bg-blue-950 text-blue-400 border border-blue-800': log.level === 'info',
+                      'bg-amber-950 text-amber-400 border border-amber-800': log.level === 'warn',
+                      'bg-rose-950 text-rose-400 border border-rose-800': log.level === 'error'
+                    }" x-text="log.level"></span>
+              <span class="text-slate-300 flex-1 break-all" x-text="log.message"></span>
+            </div>
+          </template>
+          <div x-show="logs.length === 0" class="text-slate-600 italic py-8 text-center">
+            Tarama başlatıldığında canlı loglar burada listelenecektir...
+          </div>
+        </div>
+
+        <!-- Progress bar in terminal footer -->
+        <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
+          <div>
+            İlerleme: <span class="text-emerald-400 font-bold" x-text="activeJob?.scrapedCount || 0"></span> ilan çekildi
+          </div>
+          <div x-show="activeJob?.totalPages" class="text-slate-500">
+            Sayfa: <span x-text="activeJob?.currentPage || 0"></span> / <span x-text="activeJob?.totalPages || 0"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scraped Properties List Table -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <!-- Table Header & Filter Bar -->
+      <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Çekilen İlanlar (Staging Havuzu)</h2>
+          <p class="text-xs text-slate-500">Bu ilanları inceleyebilir, filtreleyebilir ve Metraj'a aktarabilirsiniz.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Search input -->
+          <div class="relative">
+            <input type="text" x-model="filters.search" @input.debounce.300ms="loadProperties()"
+                   placeholder="Ara (başlık, no, bölge)..." 
+                   class="bg-slate-50 border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none w-48">
+            <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+
+          <!-- Status Filter -->
+          <select x-model="filters.status" @change="loadProperties()" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <option value="all">Tüm Durumlar</option>
+            <option value="pending">Bekleyen (Pending)</option>
+            <option value="synced">Aktarılmış (Synced)</option>
+            <option value="failed">Hatalı (Failed)</option>
+          </select>
+
+          <!-- Refresh button -->
+          <button @click="loadProperties(); refreshStats();" class="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition" title="Yenile">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Data Table -->
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+            <tr>
+              <th class="px-4 py-3">İlan</th>
+              <th class="px-4 py-3">Fiyat</th>
+              <th class="px-4 py-3">Konum</th>
+              <th class="px-4 py-3">Özellikler</th>
+              <th class="px-4 py-3">Koçan / Eşya</th>
+              <th class="px-4 py-3">Metraj Durumu</th>
+              <th class="px-4 py-3 text-right">İşlemler</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 bg-white">
+            <template x-for="item in properties" :key="item.code">
+              <tr class="hover:bg-slate-50 transition">
+                <td class="px-4 py-3">
+                  <div class="flex items-center space-x-3">
+                    <img :src="item.thumbnail || 'https://via.placeholder.com/60x45?text=No+Img'" 
+                         class="w-12 h-9 rounded object-cover border border-slate-200 bg-slate-100 flex-shrink-0"
+                         onerror="this.src='https://via.placeholder.com/60x45?text=No+Img'">
+                    <div class="max-w-xs">
+                      <div class="font-bold text-slate-900 truncate" :title="item.title" x-text="item.title"></div>
+                      <div class="text-[10px] text-slate-400 font-mono">
+                        #<span x-text="item.code"></span> • <span class="capitalize" x-text="item.deal_type"></span> • <span x-text="item.property_type"></span>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="font-extrabold text-slate-900" x-text="`${item.currency === 'GBP' ? '£' : (item.currency === 'EUR' ? '€' : '$')} ${Number(item.price).toLocaleString()}`"></span>
+                </td>
+
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <div class="font-medium text-slate-800" x-text="item.district || '-'"></div>
+                  <div class="text-[10px] text-slate-400" x-text="item.city || '-'"></div>
+                </td>
+
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <div class="text-slate-700">
+                    <span x-show="item.rooms" x-text="`${item.rooms}`"></span>
+                    <span x-show="item.bathrooms" x-text="` • ${item.bathrooms} Banyo`"></span>
+                  </div>
+                  <div class="text-[10px] text-slate-400" x-text="item.area ? `${item.area} m²` : '-'"></div>
+                </td>
+
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <div class="flex flex-col space-y-1">
+                    <span x-show="item.deed_type" 
+                          class="px-1.5 py-0.5 rounded text-[10px] font-semibold inline-block w-max bg-blue-50 text-blue-700" 
+                          x-text="item.deed_type"></span>
+                    <span x-show="item.furnished_status" 
+                          class="px-1.5 py-0.5 rounded text-[10px] inline-block w-max bg-slate-100 text-slate-600" 
+                          x-text="item.furnished_status"></span>
+                  </div>
+                </td>
+
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase inline-flex items-center"
+                        :class="{
+                          'bg-amber-100 text-amber-800': item.sync_status === 'pending',
+                          'bg-emerald-100 text-emerald-800': item.sync_status === 'synced',
+                          'bg-rose-100 text-rose-800': item.sync_status === 'failed'
+                        }">
+                    <span class="w-1.5 h-1.5 rounded-full mr-1"
+                          :class="{
+                            'bg-amber-500': item.sync_status === 'pending',
+                            'bg-emerald-500': item.sync_status === 'synced',
+                            'bg-rose-500': item.sync_status === 'failed'
+                          }"></span>
+                    <span x-text="item.sync_status"></span>
+                  </span>
+                </td>
+
+                <td class="px-4 py-3 whitespace-nowrap text-right space-x-2">
+                  <button @click="openDetail(item.code)" class="text-slate-500 hover:text-slate-800 font-semibold text-[11px] underline">Detay</button>
+                  <button @click="syncSingle(item.code)" 
+                          :disabled="item.sync_status === 'synced'"
+                          class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-30 text-indigo-700 font-bold rounded text-[11px] transition">
+                    Metraj'a Aktar
+                  </button>
+                </td>
+              </tr>
+            </template>
+
+            <tr x-show="properties.length === 0">
+              <td colspan="7" class="py-12 text-center text-slate-400">
+                Kayıt bulunamadı. Yukarıdan yeni bir tarama başlatabilirsiniz.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Footer -->
+      <div class="p-4 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+        <div>
+          Toplam <span class="font-bold text-slate-900" x-text="totalProperties"></span> ilandan
+          <span x-text="properties.length"></span> tanesi gösteriliyor
+        </div>
+        <div class="flex items-center space-x-2">
+          <button @click="page > 1 ? (page--, loadProperties()) : null" :disabled="page <= 1"
+                  class="px-3 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded font-medium">Önceki</button>
+          <span class="font-bold text-slate-800" x-text="`Sayfa ${page}`"></span>
+          <button @click="page < totalPages ? (page++, loadProperties()) : null" :disabled="page >= totalPages"
+                  class="px-3 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded font-medium">Sonraki</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Detail Modal -->
+  <div x-show="detailModal.open" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="font-bold text-base text-slate-900" x-text="detailModal.data?.title"></h3>
+        <button @click="detailModal.open = false" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="space-y-3 text-xs" x-show="detailModal.data">
+        <!-- Thumbnail carousel preview -->
+        <div class="flex overflow-x-auto gap-2 py-2">
+          <template x-for="(img, idx) in detailModal.data?.raw_json?.images" :key="idx">
+            <img :src="img" class="h-28 w-40 object-cover rounded-lg border flex-shrink-0">
+          </template>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div><strong>Fiyat:</strong> <span x-text="detailModal.data?.price + ' ' + detailModal.data?.currency"></span></div>
+          <div><strong>İlan No:</strong> #<span x-text="detailModal.data?.code"></span></div>
+          <div><strong>Konum:</strong> <span x-text="detailModal.data?.district + ', ' + detailModal.data?.city"></span></div>
+          <div><strong>Emlak Türü:</strong> <span x-text="detailModal.data?.property_type"></span></div>
+          <div><strong>Oda Sayısı:</strong> <span x-text="detailModal.data?.rooms || '-'"></span></div>
+          <div><strong>Banyo Sayısı:</strong> <span x-text="detailModal.data?.bathrooms || '-'"></span></div>
+          <div><strong>Metrekare:</strong> <span x-text="detailModal.data?.area ? detailModal.data?.area + ' m²' : '-'"></span></div>
+          <div><strong>Koçan Türü:</strong> <span class="capitalize" x-text="detailModal.data?.deed_type || '-'"></span></div>
+          <div><strong>Eşya Durumu:</strong> <span class="capitalize" x-text="detailModal.data?.furnished_status || '-'"></span></div>
+          <div><strong>Bina Yaşı:</strong> <span x-text="detailModal.data?.building_age || '-'"></span></div>
+          <div><strong>Site İçinde:</strong> <span x-text="detailModal.data?.in_complex ? 'Evet' : 'Hayır'"></span></div>
+          <div><strong>Takas:</strong> <span x-text="detailModal.data?.exchangeable ? 'Var' : 'Yok'"></span></div>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-slate-800 mb-1">Açıklama:</h4>
+          <p class="text-slate-600 bg-slate-50 p-3 rounded-lg border leading-relaxed max-h-40 overflow-y-auto" x-text="detailModal.data?.raw_json?.description"></p>
+        </div>
+
+        <div class="flex justify-end pt-3 border-t">
+          <button @click="syncSingle(detailModal.data?.code); detailModal.open = false;" 
+                  class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-xs">
+            Metraj'a Aktar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function dashboard() {
+      return {
+        stats: { total: 0, synced: 0, pending: 0, failed: 0 },
+        isCrawling: false,
+        syncingAll: false,
+        activeJob: null,
+        categories: [],
+        cities: [],
+        crawlForm: {
+          categoryUrl: '/kibris/satilik-konut',
+          city: '',
+          maxPages: 2,
+          delayMs: 1000
+        },
+        logs: [],
+        properties: [],
+        totalProperties: 0,
+        totalPages: 1,
+        page: 1,
+        filters: {
+          search: '',
+          status: 'all'
+        },
+        detailModal: {
+          open: false,
+          data: null
+        },
+
+        async init() {
+          await this.loadMeta();
+          await this.refreshStats();
+          await this.loadProperties();
+          this.connectSSE();
+        },
+
+        async loadMeta() {
+          try {
+            const res = await fetch('/api/categories');
+            const data = await res.json();
+            this.categories = data.categories;
+            this.cities = data.cities;
+          } catch (e) {
+            console.error('Failed to load categories', e);
+          }
+        },
+
+        async refreshStats() {
+          try {
+            const res = await fetch('/api/stats');
+            const data = await res.json();
+            this.stats = data;
+            this.isCrawling = data.isCrawling;
+          } catch (e) {
+            console.error('Failed to fetch stats', e);
+          }
+        },
+
+        async loadProperties() {
+          try {
+            const params = new URLSearchParams({
+              page: this.page,
+              limit: 20,
+              status: this.filters.status,
+              search: this.filters.search
+            });
+            const res = await fetch(`/api/properties?${params.toString()}`);
+            const data = await res.json();
+            this.properties = data.items;
+            this.totalProperties = data.total;
+            this.totalPages = data.pages || 1;
+          } catch (e) {
+            console.error('Failed to load properties', e);
+          }
+        },
+
+        connectSSE() {
+          const evtSource = new EventSource('/api/crawl/stream');
+          evtSource.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'log') {
+                this.logs.push(msg.data);
+                if (this.logs.length > 200) this.logs.shift();
+                this.$nextTick(() => {
+                  const body = document.getElementById('terminal-body');
+                  if (body) body.scrollTop = body.scrollHeight;
+                });
+              } else if (msg.type === 'progress') {
+                this.activeJob = msg.data;
+                this.isCrawling = msg.data?.status === 'running';
+                this.refreshStats();
+                this.loadProperties();
+              }
+            } catch (err) {
+              console.error(err);
+            }
+          };
+        },
+
+        async startCrawl() {
+          try {
+            const res = await fetch('/api/crawl/start', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.crawlForm)
+            });
+            const data = await res.json();
+            if (data.success) {
+              this.isCrawling = true;
+            } else {
+              alert(data.error || 'Tarama başlatılamadı');
+            }
+          } catch (e) {
+            alert('Hata: ' + e.message);
+          }
+        },
+
+        async stopCrawl() {
+          try {
+            await fetch('/api/crawl/stop', { method: 'POST' });
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        async syncSingle(code) {
+          try {
+            const res = await fetch(`/api/sync/${code}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+              this.refreshStats();
+              this.loadProperties();
+            } else {
+              alert('Aktarım hatası: ' + data.error);
+            }
+          } catch (e) {
+            alert('Hata: ' + e.message);
+          }
+        },
+
+        async syncAll() {
+          if (!confirm(`${this.stats.pending} adet bekleyen ilanı Metraj veritabanına aktarmak istiyor musunuz?`)) return;
+          this.syncingAll = true;
+          try {
+            const res = await fetch('/api/sync-all', { method: 'POST' });
+            const data = await res.json();
+            alert(`Aktarım tamamlandı! Başarılı: ${data.result.succeeded}, Hatalı: ${data.result.failed}`);
+            this.refreshStats();
+            this.loadProperties();
+          } catch (e) {
+            alert('Aktarım hatası: ' + e.message);
+          } finally {
+            this.syncingAll = false;
+          }
+        },
+
+        async openDetail(code) {
+          try {
+            const res = await fetch(`/api/properties/${code}`);
+            this.detailModal.data = await res.json();
+            this.detailModal.open = true;
+          } catch (e) {
+            alert('İlan detayı yüklenemedi');
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
