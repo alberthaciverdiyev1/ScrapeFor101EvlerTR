@@ -51,6 +51,45 @@
   <!-- Main Content Container -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
+    <!-- Cron Status Banner -->
+    <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl p-4 shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-lg border border-indigo-500/30">
+          ⏰
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="text-xs font-bold text-indigo-300 uppercase tracking-wider">Otomatik Zamanlayıcı (Cron)</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                  :class="cronInfo?.enabled ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'">
+              <span class="inline-block w-1.5 h-1.5 rounded-full mr-1" :class="cronInfo?.enabled ? 'bg-emerald-400' : 'bg-slate-400'"></span>
+              <span x-text="cronInfo?.enabled ? 'Aktif' : 'Devre Dışı'"></span>
+            </span>
+          </div>
+          <p class="text-xs text-slate-300 mt-0.5">
+            <strong class="text-white">Günde 2 Kez (10:00 ve 15:00 - 5 saat aralıkla)</strong> | Tüm kategorilerde (Satılık, Kiralık, Arsa, Ticari) ilk 2 sayfa taranır, mükerrer ilanlar atlanır, yeni ilanlar Metraj'a aktarılır.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <template x-if="cronInfo?.lastRun?.finishedAt">
+          <div class="text-right text-[11px] text-slate-400 hidden sm:block">
+            <div>Son Çalışma: <span class="text-slate-200" x-text="new Date(cronInfo.lastRun.finishedAt).toLocaleTimeString()"></span></div>
+            <div class="text-[10px] text-emerald-400 font-medium" x-text="`+${cronInfo.lastRun.newScraped} yeni ilan aktarıldı`"></div>
+          </div>
+        </template>
+
+        <button @click="triggerCron()" :disabled="isCrawling"
+                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition flex items-center shadow-md shadow-indigo-600/30">
+          <svg class="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+          </svg>
+          Şimdi Çalıştır
+        </button>
+      </div>
+    </div>
+
     <!-- Stat Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
@@ -496,6 +535,7 @@
           open: false,
           deleteFromMetraj: true
         },
+        cronInfo: null,
         activeJob: null,
         categories: [],
         cities: [],
@@ -523,8 +563,10 @@
         async init() {
           await this.loadMeta();
           await this.refreshStats();
+          await this.loadCronInfo();
           await this.loadProperties();
           this.connectSSE();
+          setInterval(() => this.loadCronInfo(), 30000);
         },
 
         async loadMeta() {
@@ -730,6 +772,28 @@
               await this.loadProperties();
             } else {
               alert('Silme hatası: ' + data.error);
+            }
+          } catch (e) {
+            alert('Hata: ' + e.message);
+          }
+        },
+
+        async loadCronInfo() {
+          try {
+            const res = await fetch('/api/cron/status');
+            this.cronInfo = await res.json();
+          } catch {}
+        },
+
+        async triggerCron() {
+          if (!confirm('Tüm kategorilerde (Satılık, Kiralık, Arsa, Ticari) ilk 2 sayfalık otomatik taramayı şimdi başlatmak istiyor musunuz?')) return;
+          try {
+            const res = await fetch('/api/cron/trigger', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+              alert('Zamanlanmış tarama görevi arka planda başlatıldı! İlerlemeyi canlı terminalden takip edebilirsiniz.');
+            } else {
+              alert('Hata: ' + data.error);
             }
           } catch (e) {
             alert('Hata: ' + e.message);

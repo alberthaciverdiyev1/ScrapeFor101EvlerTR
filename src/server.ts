@@ -12,6 +12,7 @@ import { config } from './config/index.js';
 import { stagingDb } from './database/staging.js';
 import { crawler } from './scraper/crawler.js';
 import { metrajSync } from './database/metraj-sync.js';
+import { scraperScheduler } from './scheduler/cron.js';
 import type { CrawlLog, CrawlJob } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,8 +33,9 @@ crawler.on('log', (log: CrawlLog) => {
   if (recentLogs.length > 200) recentLogs.shift();
 });
 
-// Initialize Metraj connection in background
+// Initialize Metraj connection and Cron Scheduler
 metrajSync.init();
+scraperScheduler.init();
 
 // --- REST Endpoints ---
 
@@ -145,6 +147,24 @@ app.get('/api/crawl/status', (req, res) => {
     isActive: crawler.isActive(),
     job: crawler.getJob(),
   });
+});
+
+// Cron scheduler status
+app.get('/api/cron/status', (req, res) => {
+  res.json(scraperScheduler.getStatus());
+});
+
+// Trigger cron crawl immediately
+app.post('/api/cron/trigger', (req, res) => {
+  if (crawler.isActive()) {
+    return res.status(400).json({ error: 'Zaten aktif bir tarama yürütülüyor.' });
+  }
+
+  scraperScheduler
+    .runFullCrawl('manual')
+    .catch((err) => console.error('Manual cron trigger error:', err));
+
+  res.json({ success: true, message: 'Otomatik çoklu kategori taraması başlatıldı' });
 });
 
 // SSE Live Stream for Logs & Progress
